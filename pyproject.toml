@@ -1,0 +1,24 @@
+[project]
+name = "sd-skill"
+version = "0.1.0"
+description = "Sister-Date agent skill — CLI for 姐弟恋活动匹配 服务"
+requires-python = ">=3.10"
+authors = [
+    { name = "lindkkk", email = "1746979962@qq.com" },
+]
+readme = "README.md"
+license = { text = "MIT" }
+
+dependencies = [
+    "httpx>=0.26",
+]
+
+[project.scripts]
+sd-skill = "sd_skill.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["sd_skill"]
