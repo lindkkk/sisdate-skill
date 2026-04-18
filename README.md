@@ -21,31 +21,53 @@
 
 ## 安装
 
-### Claude Code（主要目标）
+本 skill 遵循 [AgentSkills 标准](https://github.com/openclaw/clawhub/blob/main/docs/skill-format.md)，一份 `SKILL.md` 同时兼容 OpenClaw / Claude Code / 其他支持 AgentSkills 的 agent。
+
+### OpenClaw（推荐，2026 主力）
+
+OpenClaw 按优先级从以下目录加载 skills：
+1. `<workspace>/skills/` — 项目级
+2. `<workspace>/.agents/skills/` — 项目级（隐藏）
+3. `~/.agents/skills/` — 全局个人
+4. `~/.openclaw/skills/` — 全局 OpenClaw 管理
+
+**推荐用第 3 或第 4 条**（让所有项目都能用）：
 
 ```bash
-# 把 skill 克隆到 Claude skills 目录
+# 方案 1：通过 ClawHub（等 skill 发布后）
+openclaw skill install sisdate
+
+# 方案 2：手动 clone 到个人 agents 目录
+mkdir -p ~/.agents/skills
+git clone https://github.com/lindkkk/sisdate-skill.git ~/.agents/skills/sisdate
+cd ~/.agents/skills/sisdate && pip install -e .
+```
+
+之后在任意 OpenClaw 会话里说"有什么约会活动"或"我想发活动"即触发。
+
+### Claude Code
+
+```bash
 mkdir -p ~/.claude/skills
 git clone https://github.com/lindkkk/sisdate-skill.git ~/.claude/skills/sisdate
-
-# 安装 Python 依赖到你当前 Python 环境
 cd ~/.claude/skills/sisdate && pip install -e .
 ```
 
-重启 Claude Code。说一句"有什么约会活动"即可触发。
+重启 Claude Code 即可。
 
 ### 其他 agent（手动集成）
 
-任何能执行 shell 命令的 agent 都能用。把本仓库 clone 到任意位置，安装依赖后：
+任何能执行 shell 命令 + 读取 markdown 的 agent 都能用：
 
 ```bash
-python -m sd_skill <verb> [args]
+pip install httpx
+git clone https://github.com/lindkkk/sisdate-skill.git /some/path
+cd /some/path && python -m sd_skill <verb> [args]
 ```
 
-相关 agent 配置提示：
-- **Codex**（OpenAI）：把 `SKILL.md` 作为 system prompt 的一部分贴进去；命令清单见 `sd_skill/cli.py`。
-- **Claude Desktop / Cursor**：把 SKILL.md 内容作为自定义 instruction 粘贴，或等本项目后续发布 MCP 版本。
-- **自建 LangGraph / LlamaIndex**：用 `subprocess.run(["python", "-m", "sd_skill", ...])` 包装即可。
+- **Codex / OpenAI GPTs**：把 `SKILL.md` 贴进自定义指令，命令清单见下方。
+- **Claude Desktop / Cursor**：同上，粘 SKILL.md 或通过本项目后续 MCP 版本接入。
+- **LangGraph / LlamaIndex**：用 `subprocess.run(["python", "-m", "sd_skill", ...])` 做 tool wrapper。
 
 ## 服务端
 
@@ -137,8 +159,9 @@ Agent: [调 event-post-url] 打开下面的链接填表：
 ## 卸载
 
 ```bash
-rm -rf ~/.claude/skills/sisdate
-rm -rf ~/.config/sister-date   # 清本地 Token + device_secret
+rm -rf ~/.agents/skills/sisdate       # OpenClaw 路径
+rm -rf ~/.claude/skills/sisdate       # Claude Code 路径
+rm -rf ~/.config/sister-date          # 清本地 Token + device_secret
 ```
 
 ## 数据与隐私

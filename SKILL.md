@@ -1,6 +1,14 @@
 ---
 name: sisdate
-description: 姐弟恋约会活动匹配 —— 通过对话发起活动、浏览他人活动、互相发站内信。同城 + 异性 + 女方至少大 5 岁硬约束，每天最多看 2 条活动。
+description: 姐弟恋 (sister-brother, age-gap ≥5 yr, female older) 约会活动匹配服务。用于当用户想找/浏览/发布约会活动，或需要给已认识的 8 位 ID 发站内短信时。硬约束：同城 + 异性 + 女方至少比男方大 5 岁；每天最多浏览 2 条匹配活动。Use when the user says things like "有什么活动 / 有啥 / 推荐 / 有帅哥 / 有美女 / 陪我 / 最近闷 / 想找点事做 / 约会" (路线 A 找活动); "我想发活动 / 帮我约个周末 / 找人陪我吃饭 / 邀约 / 发一个" (路线 B 发活动); "有新消息吗 / 未读 / 收件" (查站内信); "给 XXXXXXXX 说 ..." (发站内信); "我的活动 / 我发的 / 改活动 / 改资料 / 看 Token / 删活动" (账户/发帖管理). 对严格无关的闲聊（天气、数学题、要求陪聊等）一律回一个固定的拒识模板，不展开对话。
+version: 0.1.0
+metadata:
+  openclaw:
+    emoji: "💞"
+    homepage: "https://github.com/lindkkk/sisdate-skill"
+    requires:
+      bins: ["python3"]
+    os: ["linux", "macos", "windows"]
 ---
 
 # sisdate — agent skill 说明
