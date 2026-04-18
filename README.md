@@ -156,6 +156,38 @@ Agent: [调 event-post-url] 打开下面的链接填表：
        填完我自动确认。
 ```
 
+## 发布到 ClawHub（OpenClaw 官方 skill 注册中心）
+
+[ClawHub](https://clawhub.ai/) 是 OpenClaw 的公开 skill 注册中心（截至 2026-04 已收录 13k+ skills）。发布到 ClawHub 后，OpenClaw 用户就能通过 `openclaw skill install sisdate` 或在 UI 里直接搜到你。
+
+**前置**：
+- 一个**满 1 周以上**的 GitHub 账号（防滥用措施）
+- 安装 OpenClaw CLI，其中带 `clawhub` 子命令
+
+**步骤**（在本仓库根目录执行）：
+
+```bash
+# 1. 登录 ClawHub（走 GitHub OAuth）
+clawhub login
+
+# 2. 预览将要发布的文件（.clawhubignore 已排除缓存/tests 等）
+clawhub diff .
+
+# 3. 发布
+clawhub publish . \
+  --slug sisdate \
+  --name "sisdate" \
+  --version 0.1.0 \
+  --tags latest
+
+# 4. 验证
+clawhub whoami
+```
+
+之后每次版本升级：改 `SKILL.md` 里的 `version:`，再 `clawhub publish . --version 0.2.0 --tags latest` 即可。
+
+> ⚠️ ClawHub 上所有 skill 采用 **MIT-0 协议**（无需署名的 MIT）。本仓库 LICENSE 已是 MIT，发布时 ClawHub 会自动标注为 MIT-0。
+
 ## 卸载
 
 ```bash

@@ -1,0 +1,30 @@
+# Exclude from ClawHub publish (similar to .gitignore)
+
+# Build / cache
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+dist/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Dev environments
+.venv/
+venv/
+env/
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Tests (not required at runtime)
+tests/
