@@ -1,7 +1,7 @@
 [project]
 name = "sd-skill"
-version = "0.1.0"
-description = "Sister-Date agent skill — CLI for 姐弟恋活动匹配 服务"
+version = "0.2.0"
+description = "Sister-Date agent skill — thin client to the server-side LLM gateway for 姐弟恋活动匹配"
 requires-python = ">=3.10"
 authors = [
     { name = "lindkkk", email = "1746979962@qq.com" },

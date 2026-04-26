@@ -1,7 +1,7 @@
 ---
 name: sisdate
-description: 姐弟恋 (sister-brother, age-gap ≥5 yr, female older) 约会活动匹配服务。用于当用户想找/浏览/发布约会活动，或需要给已认识的 8 位 ID 发站内短信时。硬约束：同城 + 异性 + 女方至少比男方大 5 岁；每天最多浏览 2 条匹配活动。Use when the user says things like "有什么活动 / 有啥 / 推荐 / 有帅哥 / 有美女 / 陪我 / 最近闷 / 想找点事做 / 约会" (路线 A 找活动); "我想发活动 / 帮我约个周末 / 找人陪我吃饭 / 邀约 / 发一个" (路线 B 发活动); "有新消息吗 / 未读 / 收件" (查站内信); "给 XXXXXXXX 说 ..." (发站内信); "我的活动 / 我发的 / 改活动 / 改资料 / 看 Token / 删活动" (账户/发帖管理). 对严格无关的闲聊（天气、数学题、要求陪聊等）一律回一个固定的拒识模板，不展开对话。
-version: 0.1.0
+description: 姐弟恋 (sister-brother, age-gap ≥5 yr, female older) 约会活动匹配服务。用于当用户想找/浏览/发布约会活动、报名加入活动、或需要给已认识的 8 位 ID 发站内短信时。硬约束：同城 + 异性 + 女方至少比男方大 5 岁；每天最多浏览 2 条匹配活动。**v0.2.0 起这是一个薄客户端**：除了 token 本地操作和 session 轮询，所有用户对话都直接转发给服务端 LLM 网关（`chat` 命令），由服务端决定调哪个工具。Use when the user says things like "有什么活动 / 有啥 / 推荐 / 陪我 / 最近闷 / 想找点事做 / 约会" (找活动); "我想发活动 / 帮我约个周末 / 找人陪我吃饭" (发活动); "我想报名 #N / 加入活动 X" (报名审批); "有新消息吗 / 未读 / 收件" (查站内信); "给 XXXXXXXX 说 ..." 或 "给 #N 说 ..." (发站内信); "我的活动 / 我的报名 / 改活动 / 改资料 / 看 Token / 删活动" (账户/发帖管理). 对严格无关的闲聊一律由服务端 LLM 回固定拒识模板。
+version: 0.2.0
 metadata:
   openclaw:
     emoji: "💞"
@@ -11,206 +11,111 @@ metadata:
     os: ["linux", "macos", "windows"]
 ---
 
-# sisdate — agent skill 说明
+# sisdate — agent skill 说明（v0.2.0 薄客户端版）
 
-你（agent）在和用户对话。用户安装了这个 skill，想用 sisdate 这个姐弟恋约会活动匹配服务。按下面的指令响应他们。
+## 核心理念变更
 
-## 触发条件（什么时候调本 skill）
+**v0.1.x（旧版）**：skill 内嵌完整意图路由 — agent 自己解析"用户说啥意思"再调具体命令（browse / send / event-post-url / ...）。
 
-用户说出以下任何一类话，都应当调起本 skill 的相关命令：
-- 找活动 / 找人：例如"有什么活动"、"最近有啥"、"推荐点什么"、"有帅哥吗"、"有美女吗"、"陪我"、"有人约我吗"、"最近闷"、"想找点事做"
-- 发起活动：例如"我想发活动"、"帮我约个周末"、"找人陪我吃饭/看展/喝酒"、"邀约"、"发一个"
-- 看自己：例如"我的活动"、"我发的"、"我的资料"、"我的 ID"
-- 看收件：例如"有新消息吗"、"未读"、"收件"
-- 发站内信：例如"给 ABCDE234 说 你好"（8 位 ID + 内容）
-- 修改活动 / 资料：例如"改活动"、"编辑活动"、"改资料"
-- 删活动：例如"删我的活动"、"取消活动"
+**v0.2.0（本版）**：skill 是**薄客户端**。把用户原话**原封不动**转发给服务端的 LLM 网关（住在 `http://43.131.6.161` 上的 Minimax 模型），由服务端 LLM 决定调哪个工具、怎么回应。skill 端只做不能在服务端做的事：本地 Token 保存 / session 配对码轮询。
 
-**兜底**：用户说的内容**严格无法归入上述类别**（纯闲聊 / 问天气 / 问数学题 / 等），回复固定模板：
+## 路由规则（agent 行为简化为 3 条）
+
+### 1. 本地无 token → 引导 onboarding
 ```
-我是一个姐弟恋约会活动匹配服务，不提供陪伴聊天功能。你可以：
-· 说「我想发活动」来发布自己的邀约
-· 说「给我看看活动」来浏览别人的邀约
-· 说「有新消息吗」查收件
-· 说「给 XXXXXXXX 说 你好」给某个 8 位 ID 发消息
+本地无 token 时（status 命令显示 token=null），询问用户：
+  "欢迎！要新注册（A）还是粘贴已有 Token（B）？或直接粘 sdt_ 开头的 Token 自动识别 B。"
 ```
-**不要临时发挥**、不要续写对话、不要开玩笑。
+- 用户选 A 或表达"我新用户" → `python -m sd_skill register-start` → 把得到的 short_url 和 nonce 显示给用户 → `python -m sd_skill register-wait <nonce>` 阻塞轮询 → 拿到 token 后再继续
+- 用户粘了 sdt_ 开头的字符串 → `python -m sd_skill set-token <token>` → 验证后继续
+- 用户选 B 但没粘 token → 提示"请把 sdt_ 开头的 Token 粘过来"
 
-## 所有调用走 CLI
+### 2. 本地操作类 → 直接调对应命令
+| 用户表达 | 命令 |
+|---|---|
+| "看我 Token / 备份码" | `show-token` |
+| "重置 Token" | `reset-token` |
+| "状态 / 配置" | `status` |
+| "改服务端地址" | `set-base-url <url>` |
 
-技术栈：本 skill 提供一个 Python CLI，命令格式：
+### 3. 其它一切 → 直接 chat 转发（**默认路径**）
+对于**任何其它用户输入**（找活动、发活动、报名、发消息、闲聊、问天气、问"你是谁"……）：
 ```
-python -m sd_skill <verb> [args]
+python -m sd_skill chat "<原话原封不动>"
 ```
-每个命令的 stdout 是一个 JSON 对象，包含 `status` 字段（`ok` / `pending` / `completed` / `empty_pool` / `daily_limit_reached` / `needs_onboarding` / `error` / ...）。
+- chat 命令会流式打印服务端 LLM 的回答到 stdout（agent 应实时把这些字符传给用户）
+- 如果服务端 LLM 调了工具（浏览、发消息、报名、审批等），stdout 会出现 `[tool: 工具名]` 标记
+- chat 命令最后会输出 `---END---` + 一行 JSON 结果（含完整 reply 文本和 tool_calls 列表）
+- agent 不需要解析这行 JSON，**只把 ---END--- 之前的所有字符**作为 LLM 回应展示给用户即可
 
-**每次调用前，先确认 CLI 可用**：
+## chat 调用示例
+
 ```bash
-python -m sd_skill status
-```
-如果返回 `{"status":"ok", "token_set": true}` 表示用户已登录。
+# 用户说"有什么活动"
+python -m sd_skill chat "有什么活动"
+# 输出（流式）：
+你是不是想找一个约会活动？是的话回复「是」或「看看」；如果你想发起活动，请说「我想发活动」。
+---END---
+{"status":"ok","reply":"你是不是...","tool_calls":[],"stop_reason":"end_turn"}
 
-## 首次使用流程（两分支）
-
-当 `status` 返回 `token_set: false`，用户是首次用，问他：
-
-> "你好！请选择：
->  A) 首次使用 —— 我帮你发起注册（30 秒填一张下拉表单）
->  B) 已有账户，从其他设备迁移 —— 请粘贴你的 Token"
-
-### 分支 A · 新用户注册
-
-1. 运行 `python -m sd_skill register-start`
-2. 把返回的 `short_url` 和 `nonce` 告诉用户，**让他用浏览器打开短链填表**。**不要自动打开浏览器**。
-   ```
-   打开下面的链接填表（30 秒搞定）：
-   <short_url>
-   或者打开 http://43.131.6.161/p 手动输入码：<nonce>
-   填完我会自动接手，无需粘贴任何东西。
-   ```
-3. 进入轮询循环：重复调用
-   ```bash
-   python -m sd_skill register-wait <nonce> --timeout 30
-   ```
-   直到返回 `status=completed`（成功）或 `status=expired`（超时 15 分钟）。每次调用最多阻塞 30s，所以你会定期"回来等"。最多等 **5 轮**（约 2-3 分钟）然后放弃告诉用户超时了。
-4. 完成后告诉用户：`你好，<external_id>！身份已建立，开始为你服务……`
-
-### 分支 B · 迁移已有账户
-
-1. 让用户粘贴 Token（以 `sdt_` 开头的长字符串）。
-2. 运行 `python -m sd_skill set-token <token>`
-3. 返回 `status=ok` 则成功，告诉用户 `迁移完成，你的 ID 是 <external_id>`。返回 `status=error` 则 Token 无效，让用户重新输入或走分支 A。
-
-**如果用户直接粘贴了一串 `sdt_xxx` 格式的文字而没有说"我有 Token"，自动走分支 B**。
-
-## 每次对话开始的自动行为
-
-只要用户已有 Token（`status` 返回 `token_set: true`），在响应首条用户消息**之前**先调一次：
-```bash
-python -m sd_skill unread
-```
-如果 `count > 0`，在你回答用户之前加一行提示：
-> 📬 你有 N 条未读消息（说"有新消息吗"可查看）
-
-## 意图路由表
-
-根据用户说的话，调对应命令。**无需要求用户说得很精确**；下列是关键词示例：
-
-### 路线 A · 找活动
-
-用户说：`有什么活动` / `推荐` / `有啥` / `陪我` / `最近闷` / `美女` / `帅哥` / `认识新的` / `活动`（不带"我的"）
-
-**先反问确认**：
-> 你是不是想找一个约会活动？是的话回复「是」或「看看」，不想的话告诉我你想发活动。
-
-等用户回复「是 / 好 / 对 / 看看 / 可以 / 行」等肯定词后再调：
-```bash
-python -m sd_skill browse
-```
-根据返回 status 回复：
-- `ok`：渲染活动卡片（见下"渲染约定"），在末尾加 `（你今天还能看 {quota_left} 条。喜欢就给作者发消息：给 <ID> 说 ...）`
-- `daily_limit_reached`：`你今天已经看完了 2 个活动 😊 明天再来。`
-- `empty_pool`：`今天暂时没有匹配到新的活动（同城 + 异性 + 女方至少大 5 岁）。你今天还能看 {quota_left} 条。可以明天再来，或者自己发一个活动。`
-
-如果用户说「下一个」/「再来一个」/「换一个」，直接再调 `browse` 不反问。
-
-### 路线 B · 发活动
-
-用户说：`我想发活动` / `帮我约个周末` / `找人陪我吃饭` / `发起` / `邀约`
-
-1. 运行 `python -m sd_skill event-post-url`
-2. 如果返回 `status=quota_exceeded`，告诉用户 `你已经有一个活动在挂着啦（规则：同时只能 1 个）。说"我的活动"查看并删除后再发。`
-3. 如果返回 `status=ok`，告诉用户：
-   > 打开下面的链接填表：
-   > <short_url>
-   > 填完我自动接手。
-4. 启动轮询循环：`python -m sd_skill event-poll <nonce> --timeout 30`，最多 3 轮。完成后告诉用户 `✅ 活动 #<event_id> 已发布。`
-5. 如果超时：告诉用户 `没等到你填完表单，等你填完说"我的活动"来确认。`
-
-### 辅助命令
-
-| 用户意图 | 命令 |
-|---------|------|
-| `我的活动` / `我发的` → 列表 | `python -m sd_skill my-events` |
-| `我的活动内容` / `详情` | `python -m sd_skill my-events`，取第一个 open 的 event_id，再 `event-detail <id>` |
-| `修改活动` / `改活动` | 用 my-events 找到 open 活动 → `event-edit-url <id>` → 返回短链 → 轮询 `event-poll` |
-| `删活动` / `删除我的活动` | my-events 找 open 活动；如果 1 个直接 `event-delete <id>`；多个请用户指定 `#编号` |
-| `删 #3` / `取消活动 3` | `event-delete 3` |
-| `改资料` | `profile-edit-url` 返回短链 → 轮询 `profile-edit-poll` |
-| `看 Token` / `备份码` / `导出 token` | `show-token`，提醒用户妥善保管 |
-| `重置 Token` | 确认 → `reset-token`（老 Token 立即失效） |
-| `给 ABCDE234 说 你好` | `send ABCDE234 "你好"`（注意引号包裹多字内容） |
-| `有新消息吗` / `未读` / `收件` | 先 `unread`，若 >0 再 `inbox`，展示前 5 条摘要 |
-| `读第 N 条` / `看消息 X` | `msg <message_id>`（会自动标为已读） |
-| `了解一下 ABCDE234` | `user-public ABCDE234` 返回对方脱敏资料 |
-
-## 渲染约定（活动卡片）
-
-当 `browse` 返回 `status=ok`，用这个格式渲染：
-
-```
-┌─ #<id> 《<title>》
-│  <author_gender='female' ? '姐姐' : '弟弟'> #<external_id> · <age>岁 · <city>
-│  交往目标：<goal_cn>
-│
-│  <description>
-│
-│  时间：<start_time 转 UTC+8>
-│  人数：<people_cn>
-│  [费用：<cost_note>]   只在非空时显示
-│  [期望：<expectation>] 只在非空时显示
-│  [联系：<contact_info>] 只在非空时显示
+# 用户回复"是"
+python -m sd_skill chat "是"
+# 输出：
+[tool: browse_next_event]
+┌─ 《周末外滩散步》
+│  👩 #1 · 38岁 · 上海
+│  ...
 └─
-想参加？说「给 <external_id> 说 ...」。不喜欢说「下一个」。
+---END---
+{...}
 ```
 
-枚举中文映射：
-- `people`: `two` = 2 人约会，`small` = 小聚会 3-5，`large` = 多人 6+
-- `relationship_goal`: `meet_friend` = 结交新朋友，`short_open_long` = 短期但不拒长期，`long_open_short` = 长期但不拒短期，`short_fun` = 享受短期乐趣，`long_term` = 寻找长期伴侣，`undecided` = 还没想好
+## 会话历史（多轮对话）
 
-## 限制与注意事项
+服务端不持久化对话历史。agent 应在内存里保留最近的几轮 user/assistant 对话，每次 chat 调用时通过 `--history-json` 参数附上：
 
-- **不要伪造 8 位 ID**。用户提的 ID 如果格式不对（不是 8 位字母数字）就提醒他。
-- **不要用 LLM 改写用户的站内信内容**。send 命令直接传原文。
-- **不要扩展功能**。SKILL.md 没列的意图，一律走兜底。
-- **不要催用户发活动**。如果 `empty_pool`，给用户一个"明天再来"+"也可以自己发"两条路，不要反复推销。
-- **尊重每日 2 条限额**。不要暗示"再刷刷可能有新的"，这只会浪费用户体验。
-- **"同时只能有 1 个活动"不是 bug**。用户想发新活动被 `EVENT_QUOTA_EXCEEDED` 拒时，清晰告诉他"删了旧的才能发新的"。
+```bash
+python -m sd_skill chat "再来一个" --history-json '[
+  {"role":"user","content":"有什么活动"},
+  {"role":"assistant","content":"你是不是想找..."},
+  {"role":"user","content":"是"},
+  {"role":"assistant","content":"┌─ 《周末外滩散步》..."}
+]'
+```
 
-## Few-shot 示例
+**最多保留 20 轮**（40 条消息）即可，超出由 agent 自己截断。
 
-### 姐姐端典型对话
+## 命令清单（兜底 / 高级用法）
 
-**User**: 最近好闷
-**Agent** (判定为路线 A 反问): 你是不是想找一个约会活动？是的话回复「是」或「看看」，不想的话告诉我你想发活动。
-**User**: 是
-**Agent** (调 `browse` 返回 ok): [渲染活动卡片] + 提示
+老的 v0.1.x 命令全部保留，**用于 chat 端不可达时的兜底**或脚本化场景。日常对话不需要用：
 
-**User**: 有人陪我吃饭吗
-**Agent**: 你是不是想找一个约会活动？...
+### 身份 + 配置
+- `status` / `set-base-url <url>` / `register-start` / `register-wait <nonce>` / `set-token <tok>` / `show-token` / `reset-token`
 
-**User**: 我想发一个周末的活动
-**Agent** (直接走路线 B): [调 event-post-url] 打开链接填表：<short_url> ...
+### 资料
+- `whoami` / `profile-edit-url` / `profile-edit-poll <nonce>` / `user-public <8-char-id>`
 
-### 弟弟端典型对话
+### 活动（自己发的）
+- `my-events` / `event-detail <id>` / `event-post-url` / `event-edit-url <id>` / `event-delete <id>` / `event-poll <nonce>`
 
-**User**: 最近有没有什么姐姐
-**Agent** (反问): 你是不是想找一个约会活动？...
-**User**: 对
-**Agent** (调 `browse`): [渲染卡片]
+### 浏览
+- `browse` / `quota-left`
 
-**User**: 有新消息吗
-**Agent** (调 `unread` + `inbox`): 你有 2 条未读消息，最近 2 条：
-- #5 从 R4DFRD77 (04-18 14:30): 你好，看到你发的活动...
-- #3 从 7K2M9X72 (04-17 20:15): [已读] 周六 OK 吗？
-说"读第 N 条"来展开全文。
+### 站内信
+- `send <to_external_id> <content>` / `unread` / `inbox` / `outbox` / `msg <id>`
 
-## 兜底模板（复制粘贴用）
+### v0.2.0 新增
+- `chat <message> [--history-json '...']`
+
+## 服务端
+
+默认连 `http://43.131.6.161`。可用环境变量 `SISDATE_API_BASE` 或 `set-base-url` 覆盖。所有 token 存在 `~/.config/sister-date/token`。
+
+## 兜底固定模板（仅当服务端 LLM 网关不可达时由 agent 直接回）
 
 ```
-我是一个姐弟恋约会活动匹配服务，不提供陪伴聊天功能。你可以：
-· 说「我想发活动」来发布自己的邀约
-· 说「给我看看活动」来浏览别人的邀约
-· 说「有新消息吗」查收件
-· 说「给 XXXXXXXX 说 你好」给某个 8 位 ID 发消息
+sisdate 服务暂时不可用。请稍后再试。
+你可以先用本地命令查看：
+- python -m sd_skill status   （本地配置）
+- python -m sd_skill show-token  （备份 token）
 ```

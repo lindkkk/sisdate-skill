@@ -10,7 +10,7 @@ import json
 import sys
 
 from sd_skill import config
-from sd_skill.commands import browse, events, messages, profile, register
+from sd_skill.commands import browse, chat, events, messages, profile, register
 
 
 def _print(obj: dict) -> int:
@@ -95,6 +95,18 @@ def build_parser() -> argparse.ArgumentParser:
     smr = sub.add_parser("msg", help="read one message (stamps read_at)")
     smr.add_argument("message_id", type=int)
 
+    # v0.2.0: server-side LLM chat (preferred entry point)
+    sch = sub.add_parser(
+        "chat",
+        help="send a message to the server LLM gateway and stream the reply",
+    )
+    sch.add_argument("message", help="user utterance (wrap in quotes)")
+    sch.add_argument(
+        "--history-json",
+        default=None,
+        help="optional JSON array of {role, content} prior turns",
+    )
+
     return p
 
 
@@ -172,6 +184,23 @@ def main(argv: list[str] | None = None) -> int:
         return _print(messages.outbox(args.limit, args.offset))
     if cmd == "msg":
         return _print(messages.read(args.message_id))
+
+    if cmd == "chat":
+        history = None
+        if args.history_json:
+            try:
+                history = json.loads(args.history_json)
+            except json.JSONDecodeError as e:
+                return _print({
+                    "status": "error",
+                    "code": "BAD_HISTORY",
+                    "message": f"--history-json invalid: {e}",
+                })
+        result = chat.chat(args.message, history)
+        # NB: chat already streamed to stdout. Emit a JSON trailer so
+        # JSON-mode consumers still get a structured tail.
+        sys.stdout.write("---END---\n")
+        return _print(result)
 
     return _print({"status": "error", "code": "UNKNOWN_CMD", "message": cmd})
 
